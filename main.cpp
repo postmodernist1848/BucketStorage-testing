@@ -8,10 +8,12 @@
 #include <random>
 #include <utility>
 
-#define LOGGING 0
+#define S_OP_LOGGING 0		 // whether to log S actions
+#define RANDOM_TEST_LOG 0	 // whether to print BS state in random test
+
 void p()
 {
-#if LOGGING
+#if S_OP_LOGGING
 	std::cout << actions.back() << '\n';
 #endif
 }
@@ -159,11 +161,13 @@ TEST(bucket_storage, random)
 	};
 	auto check = [&]()
 	{
+#if RANDOM_TEST_LOG
 		for (auto &s : bs)
 		{
 			std::cout << s << ' ';
 		}
 		std::cout << '\n';
+#endif
 		EXPECT_EQ(bs.size(), v.size());
 		std::vector< S > bs_data;
 		for (auto &s : bs)
@@ -194,7 +198,9 @@ TEST(bucket_storage, random)
 			auto bsit = std::find(bs.begin(), bs.end(), v[index]);	  // requires std::iterator_traits
 			EXPECT_NE(bsit, bs.end());
 			EXPECT_EQ(*bsit, v[index]);
+#if RANDOM_TEST_LOG
 			std::cout << "deleting: " << v[index] << '\n';
+#endif
 			erase(bsit, vit);
 			check();
 		}
@@ -202,7 +208,9 @@ TEST(bucket_storage, random)
 		{
 			int to_insert = ints(rng);
 			insert(to_insert);
+#if RANDOM_TEST_LOG
 			std::cout << "inserting: " << to_insert << '\n';
+#endif
 			check();
 		}
 	}
@@ -241,9 +249,13 @@ concept Container = requires(ContainerType a, const ContainerType b) {
 	{
 		a.size()
 	} -> std::same_as< typename ContainerType::size_type >;
+	/*
 	{
+		// maybe we don't really need this
+		// unless you find a sensible way to calculate this
 		a.max_size()
 	} -> std::same_as< typename ContainerType::size_type >;
+	*/
 	{
 		a.empty()
 	} -> std::same_as< bool >;
@@ -252,12 +264,13 @@ concept Container = requires(ContainerType a, const ContainerType b) {
 template< Container C >
 void container_f(C c)
 {
+	(void)c;
 }
 
 TEST(bucket_storage, container)
 {
 	EXPECT_TRUE(Container< BucketStorage< S > >);
-	// container_f(BucketStorage< S >()); // uncomment to see why it's failing
+	// container_f(BucketStorage< S >());	  // uncomment to see why it's failing
 }
 
 int main(int argc, char **argv)
