@@ -43,13 +43,13 @@ struct S
 		p();
 		return *this;
 	}
-	S(S &&s)
+	S(S &&s) noexcept
 	{
 		x = s.x;
 		actions.push_back(RVALUE_COPY_CONSTRUCTOR);
 		p();
 	}
-	S &operator=(S &&s)
+	S &operator=(S &&s) noexcept
 	{
 		x = s.x;
 		actions.push_back(RVALUE_ASSIGNMENT_OPERATOR);
@@ -137,17 +137,17 @@ TEST(bucket_storage, lvalue_insert)
 
 // randomly chooses to insert or delete an S element
 // control vector is used to verify operations' correctness
-// the check is done via getting all BS elements into a vector and comparing sorted data
+// the check is done by getting all BS elements into a vector and comparing sorted data
 TEST(bucket_storage, random)
 {
 	std::random_device dev;
 	std::random_device::result_type seed = dev();	 // you can use your seed to get the same inputs every time
 	std::mt19937 rng(seed);
 
-	const int iterations = 120;		   // How many times to attempt insert()/erase()
+	const int iterations = 200;		   // How many times to attempt insert()/erase()
 	const double delete_prob = 0.1;	   // Probability for erase()
 
-	BucketStorage< S > bs;	  // Here you can call an alternative constructor
+	BucketStorage< S > bs(20);	  // Here you can call an alternative constructor
 	std::vector< S > v;
 	auto insert = [&](int x)
 	{
@@ -183,13 +183,14 @@ TEST(bucket_storage, random)
 		double r = prob(rng);
 		if (r <= delete_prob)
 		{
-			if (bs.size() == 0)
+			if (v.size() == 0)
 				continue;
 			std::uniform_int_distribution<> d(0, (int)v.size() - 1);
 			int index = d(rng);
 			auto vit = v.begin() + index;
-			auto bsit = std::find(bs.begin(), bs.end(), v[index]);
+			auto bsit = std::find(bs.begin(), bs.end(), v[index]);	  // requires std::iterator_traits
 			EXPECT_NE(bsit, bs.end());
+			EXPECT_EQ(*bsit, v[index]);
 			std::cout << "deleting: " << v[index] << '\n';
 			erase(bsit, vit);
 			check();
