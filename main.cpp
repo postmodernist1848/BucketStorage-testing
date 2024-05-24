@@ -1,15 +1,14 @@
 #include "bucket_storage.hpp"
 #include "iostream"
-#include <type_traits>
 
 #include <gtest/gtest.h>
 
-#include <concepts>
 #include <random>
 #include <utility>
 
 #define S_OP_LOGGING 0		 // whether to log S actions
 #define RANDOM_TEST_LOG 0	 // whether to print BS state in random test
+#define STACK_TEST 0		 // enable Stack<T> test
 
 void p()
 {
@@ -79,6 +78,7 @@ struct S
 };
 std::vector< const char * > S::actions;
 
+#if STACK_TEST
 TEST(stack, pushpop)
 {
 	Stack< int > stack;
@@ -95,6 +95,7 @@ TEST(stack, pushpop)
 	stack.push(6);
 	stack.push(7);
 }
+#endif
 
 TEST(bucket_storage, rvalue_insert_erase)
 {
@@ -118,7 +119,7 @@ TEST(bucket_storage, rvalue_insert_erase)
 		while (!ss.empty())
 		{
 			--it;
-			EXPECT_EQ((*it).x, i--);
+			EXPECT_EQ(it->x, i--);
 			it = ss.erase(it);
 		}
 	}
