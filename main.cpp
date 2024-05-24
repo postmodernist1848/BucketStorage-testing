@@ -1,6 +1,5 @@
 #include "bucket_storage.hpp"
 #include "iostream"
-#include "stack.hpp"
 
 #include <gtest/gtest.h>
 
