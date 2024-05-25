@@ -343,6 +343,19 @@ TEST(bucket_storage, block_capacity_extremes1)
 	EXPECT_EQ((it++)->x, 3);
 }
 
+TEST(bucket_storage, const_bs)
+{
+	const BucketStorage< S > const_bs;
+	for (auto &s : const_bs)
+	{
+		(void)s;
+	}
+	BucketStorage< S > bs = const_bs;
+	bs.insert(S(1));
+	const auto it = bs.begin();
+	EXPECT_EQ(it->x, 1);
+}
+
 template< Container C >
 void container_f(C c)
 {
@@ -358,7 +371,11 @@ TEST(bucket_storage, container)
 class TraceHandler : public testing::EmptyTestEventListener
 {
 	// Called after a test ends.
-	void OnTestEnd(const testing::TestInfo &test_info) override { S::actions.clear(); }
+	void OnTestEnd(const testing::TestInfo &test_info) override
+	{
+		(void)test_info;
+		S::actions.clear();
+	}
 };
 
 int main(int argc, char **argv)
