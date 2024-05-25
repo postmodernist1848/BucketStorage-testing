@@ -256,7 +256,8 @@ TEST(methods, empty)
 	}
 	EXPECT_TRUE(ss.empty());
 }
-TEST(methods, shrink_to_fit)
+
+auto random_bs_v()
 {
 	BucketStorage< S > bs;
 	std::vector< S > v;
@@ -272,11 +273,110 @@ TEST(methods, shrink_to_fit)
 			v.erase(v.begin() + i);
 		}
 	}
+	return std::make_pair(std::move(bs), std::move(v));
+}
+
+TEST(methods, shrink_to_fit)
+{
+	auto [bs, v] = random_bs_v();
 	expect_same_elements(bs, v);
 	// std::cout << "before: " << bs.capacity() << '\n';
 	bs.shrink_to_fit();
 	// std::cout << "after: " << bs.capacity() << '\n';
 	expect_same_elements(bs, v);
+}
+TEST(methods, clear)
+{
+	auto [bs, v] = random_bs_v();
+	expect_same_elements(bs, v);
+	bs.clear();
+	v.clear();
+	EXPECT_EQ(bs.size(), 0);
+	EXPECT_EQ(bs.capacity(), 0) << "By definition, empty bucket storage should deallocate all blocks";
+	expect_same_elements(bs, v);
+}
+
+TEST(methods, get_to_distance)
+{
+	BucketStorage< S > bs(10);
+	for (int i = 0; i < 20; ++i)
+	{
+		bs.insert(S(randint()));
+	}
+	auto it = bs.begin();
+	size_t dist = 11;
+	for (size_t i = 0; i < dist; ++i)
+	{
+		++it;
+	}
+	EXPECT_EQ(it, bs.get_to_distance(bs.begin(), dist));
+}
+
+TEST(methods, iterator_operators)
+{
+	auto expect_eq = [](BucketStorage< S >::iterator val1, BucketStorage< S >::iterator val2, const char *message)
+	{
+		EXPECT_TRUE(val1 == val2 && !(val1 != val2)) << message;
+	};
+	BucketStorage< S > bs(2);
+	for (int i = 0; i < 5; ++i)
+	{
+		S value = S(randint());
+		EXPECT_EQ(value, *bs.insert(value)) << "Unary * operator";
+		EXPECT_EQ(value.x, bs.insert(value)->x) << "-> operator";
+	}
+	auto it = bs.begin();
+	expect_eq(it++, bs.begin(), "postfix increment operator");
+	EXPECT_TRUE(it >= bs.begin()) << ">= operator";
+	EXPECT_TRUE(it > bs.begin()) << "> operator";
+	expect_eq(++it, ++(++bs.begin()), "prefix increment operator");
+	EXPECT_TRUE(it > ++bs.begin()) << "> operator";
+
+	auto it2 = it;
+	expect_eq(it2--, it, "postfix decrement operator");
+	expect_eq(--it2, bs.begin(), "prefix decrement operator");
+
+	auto it3 = bs.begin();
+	EXPECT_TRUE(++bs.begin() >= bs.begin()) << ">= operator";
+	EXPECT_FALSE(it3++ > bs.begin()) << "> operator";
+
+	for (int i = 1; i <= 20; ++i)
+	{
+		bs.insert(S(randint()));
+	}
+
+	it = bs.begin();
+	for (int i = 0; it != bs.end(); ++i)
+	{
+		if (i == 2 || i == 6 || i == 13 || i == 18)
+		{
+			it = bs.erase(it);
+		}
+		else
+		{
+			++it;
+		}
+	}
+	it = bs.begin();
+	for (int i = 0; i < 15; ++i)
+	{
+		auto prev = it++;
+		auto next = it;
+		++next;
+		EXPECT_TRUE(it > prev);
+		EXPECT_TRUE(prev < it);
+		EXPECT_TRUE(next > prev);
+		EXPECT_TRUE(prev < next);
+		EXPECT_TRUE(next > it);
+		EXPECT_TRUE(it < next);
+
+		EXPECT_TRUE(it > bs.begin());
+		EXPECT_TRUE(bs.begin() < it);
+		EXPECT_TRUE(bs.end() > it);
+		EXPECT_TRUE(it < bs.end());
+		EXPECT_TRUE(--bs.end() > it);
+		EXPECT_TRUE(it < --bs.end());
+	}
 }
 
 // assumes insertion order
@@ -388,6 +488,22 @@ TEST(assuming_order, block_capacity_extremes1)
 	EXPECT_EQ((it++)->x, 2);
 	EXPECT_EQ((it++)->x, 3);
 	EXPECT_EQ(it, ss1.end());
+}
+
+TEST(typing, cbegin)
+{
+	const BucketStorage< S > const_bs;
+	EXPECT_TRUE((std::same_as< decltype(const_bs.begin()), BucketStorage< S >::const_iterator >))
+		<< "begin() should have a "
+		   "const overload that "
+		   "returns const_iterator";
+	EXPECT_TRUE((std::same_as< decltype(const_bs.end()), BucketStorage< S >::const_iterator >))
+		<< "end() should have a "
+		   "const overload that "
+		   "returns const_iterator";
+	BucketStorage< S > bs;
+	EXPECT_TRUE((std::same_as< decltype(bs.cbegin()), BucketStorage< S >::const_iterator >));
+	EXPECT_TRUE((std::same_as< decltype(bs.cend()), BucketStorage< S >::const_iterator >));
 }
 
 TEST(typing, const_bs)
