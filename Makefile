@@ -12,5 +12,8 @@ main: main.cpp stack.hpp bucket_storage.hpp
 memory: CXXFLAGS += -fsanitize=address -O0
 memory: main
 
+benchmark: CXXFLAGS += -O0
+benchmark: main
+
 clean:
 	rm -rf main

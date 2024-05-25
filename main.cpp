@@ -3,6 +3,8 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <cstdlib>
 #include <random>
 #include <utility>
 
@@ -176,7 +178,7 @@ void insert(BucketStorage< S > &bs, std::vector< S > &v, int x)
 // the check is done by getting all BS elements into a vector and comparing sorted data
 TEST(methods, random)
 {
-	const int iterations = 200;		   // How many times to attempt insert()/erase()
+	const int iterations = 1000;		   // How many times to attempt insert()/erase()
 	const double delete_prob = 0.1;	   // Probability for erase()
 
 	BucketStorage< S > bs(20);	  // Here you can call an alternative constructor
@@ -587,6 +589,34 @@ TEST(typing, concepts)
 	// container_f(BucketStorage< S >());	  // uncomment to see why it's failing
 }
 
+int iterations = 10000;
+TEST(benchmark, insert_erase_iter) {
+
+    std::cout << "Benchmark: " << iterations << " iterations\n";
+	const double delete_prob = 0.2;
+	BucketStorage< S > bs(20);
+
+	for (int i = 0; i < iterations; i++)
+	{
+		double r = randdouble();
+		if (r <= delete_prob && !bs.empty())
+		{
+            int pos = randint(0, bs.size() - 1);
+            auto it = bs.begin();
+            for (int i = 0; i < pos; ++i) { // iteration
+                ++it;
+            }
+            bs.erase(it); // erase
+		}
+		else
+		{
+			bs.insert(S(Id::get_id())); // insert
+		}
+	}
+}
+
+//TODO: a memory leak test (use object that allocates memory instead of S)
+
 class TraceHandler : public testing::EmptyTestEventListener
 {
 	// Called after a test ends.
@@ -601,6 +631,9 @@ class TraceHandler : public testing::EmptyTestEventListener
 int main(int argc, char **argv)
 {
 	::testing::InitGoogleTest(&argc, argv);
+    if (argc > 1) {
+        iterations = std::atoi(argv[1]);
+    }
 
 	testing::TestEventListeners &listeners = testing::UnitTest::GetInstance()->listeners();
 	listeners.Append(new TraceHandler);
