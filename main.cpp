@@ -379,8 +379,15 @@ void container_f(C c)
 	(void)c;
 }
 
-TEST(bucket_storage, container)
+TEST(bucket_storage, concepts)
 {
+	EXPECT_TRUE(std::is_default_constructible< BucketStorage< S > >());
+	EXPECT_TRUE(std::is_copy_assignable< BucketStorage< S > >());
+	EXPECT_TRUE(std::is_move_assignable< BucketStorage< S > >());
+	EXPECT_TRUE(std::copy_constructible< BucketStorage< S > >);
+	EXPECT_TRUE(std::move_constructible< BucketStorage< S > >);
+	EXPECT_TRUE(std::destructible< BucketStorage< S > >);
+
 	EXPECT_TRUE(Container< BucketStorage< S > >);
 	// container_f(BucketStorage< S >());	  // uncomment to see why it's failing
 }
