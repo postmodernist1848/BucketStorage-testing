@@ -10,6 +10,12 @@
 #define RANDOM_TEST_LOG 0	 // whether to print BS state in random test
 #define STACK_TEST 0		 // enable Stack<T> test
 
+/* Warning: tests marked with 'assumes insertion order'
+ * test for specific order in BucketStorage, that is,
+ * the iterator should return elements in
+ * the order in which they were inserted (without erase)
+ */
+
 void p()
 {
 #if S_OP_LOGGING
@@ -105,50 +111,6 @@ void print(BucketStorage< S > &bs)
 	}
 	std::cout << '\n';
 }
-
-TEST(bucket_storage, rvalue_insert_erase)
-{
-	BucketStorage< S > ss(3);
-	for (int i = 1; i <= 10; i++)
-	{
-		ss.insert(S(i));
-		EXPECT_EQ(S::actions[S::actions.size() - 2], S::RVALUE_COPY_CONSTRUCTOR);
-	}
-	{
-		int i = 0;
-		for (auto &s : ss)
-		{
-			EXPECT_EQ(s.x, ++i);
-		}
-	}
-	{
-		auto it = ss.end();
-		int i = 10;
-		while (!ss.empty())
-		{
-			--it;
-			EXPECT_EQ(it->x, i--);
-			it = ss.erase(it);
-		}
-	}
-}
-
-TEST(bucket_storage, lvalue_insert)
-{
-	BucketStorage< S > ss(3);
-	for (int i = 1; i <= 10; i++)
-	{
-		S s(i);
-		ss.insert(s);
-		EXPECT_EQ(S::actions.back(), S::LVALUE_COPY_CONSTRUCTOR);
-	}
-	int i = 0;
-	for (auto &s : ss)
-	{
-		EXPECT_EQ(s.x, ++i);
-	}
-}
-
 // randomly chooses to insert or delete an S element
 // control vector is used to verify operations' correctness
 // the check is done by getting all BS elements into a vector and comparing sorted data
@@ -220,6 +182,152 @@ TEST(bucket_storage, random)
 		}
 	}
 }
+TEST(bucket_storage, swap)
+{
+	/* Fun fact:
+	 * std::swap can (and is implemented in standard library by default)
+	 * in terms of move assignment and move construction
+	 * like you would do
+	 * int x, y;
+	 * int t = x;
+	 * x = y;
+	 * y = t;
+	 */
+	BucketStorage< S > bs1;
+	bs1.insert(S(1));
+	BucketStorage< S > bs2(20);
+	bs2.insert(S(2));
+
+	int before = bs1.begin()->x;
+	bs1.swap(bs2);
+	EXPECT_EQ(bs2.begin()->x, before);
+	bs1.swap(bs2);
+	EXPECT_EQ(bs1.begin()->x, before);
+}
+
+// assumes insertion order
+TEST(assuming_order, rvalue_insert_erase)
+{
+	BucketStorage< S > ss(3);
+	for (int i = 1; i <= 10; i++)
+	{
+		ss.insert(S(i));
+		EXPECT_EQ(S::actions[S::actions.size() - 2], S::RVALUE_COPY_CONSTRUCTOR)
+			<< "rvalue copy constructor should be "
+			   "used\n";
+	}
+	{
+		int i = 0;
+		for (auto &s : ss)
+		{
+			EXPECT_EQ(s.x, ++i) << "incorrect value\n";
+		}
+	}
+	{
+		auto it = ss.end();
+		int i = 10;
+		while (!ss.empty())
+		{
+			--it;
+			EXPECT_EQ(it->x, i--) << "incorrect value\n";
+			it = ss.erase(it);
+		}
+	}
+}
+
+// assumes insertion order
+TEST(assuming_order, lvalue_insert)
+{
+	BucketStorage< S > ss(3);
+	for (int i = 1; i <= 10; i++)
+	{
+		S s(i);
+		ss.insert(s);
+		EXPECT_EQ(S::actions.back(), S::LVALUE_COPY_CONSTRUCTOR) << "expected lvalue copy constructor\n";
+	}
+	int i = 0;
+	for (auto &s : ss)
+	{
+		EXPECT_EQ(s.x, ++i) << "incorrect value\n";
+	}
+}
+
+// assumes insertion order
+TEST(assuming_order, RAII)
+{
+	BucketStorage< S > bs_lvalue;
+	bs_lvalue.insert(S(1));
+	bs_lvalue.insert(S(2));
+
+	bs_lvalue = BucketStorage< S >(2);	  // rvalue assignment
+	bs_lvalue.insert(S(3));
+	bs_lvalue.insert(S(4));
+	bs_lvalue.insert(S(5));
+	EXPECT_EQ(bs_lvalue.size(), 3);
+	EXPECT_EQ(bs_lvalue.capacity(), 4);
+	EXPECT_EQ(bs_lvalue.begin()->x, 3);
+	EXPECT_EQ((++(++bs_lvalue.begin()))->x, 5);
+
+	BucketStorage< S > bs_copy(bs_lvalue);	  // lvalue copy constructor
+	EXPECT_EQ(bs_copy.size(), 3);
+	EXPECT_EQ(bs_copy.capacity(), 4);
+	EXPECT_EQ(bs_copy.begin()->x, 3);
+	EXPECT_EQ((++(++bs_lvalue.begin()))->x, 5);
+
+	bs_lvalue = bs_lvalue;	  // self assignment
+	EXPECT_EQ(bs_lvalue.size(), 3);
+	EXPECT_EQ(bs_lvalue.capacity(), 4);
+	EXPECT_EQ(bs_lvalue.begin()->x, 3);
+	EXPECT_EQ((++(++bs_lvalue.begin()))->x, 5);
+
+	BucketStorage< S > bs_rvalue_constructed(BucketStorage< S >(20));
+	bs_rvalue_constructed.insert(S(1));
+	EXPECT_EQ(bs_rvalue_constructed.size(), 1);
+	EXPECT_EQ(bs_rvalue_constructed.capacity(), 20);
+	EXPECT_EQ(bs_rvalue_constructed.begin()->x, 1);
+}
+
+// assumes insertion order
+TEST(assuming_order, block_capacity_extremes2)
+{
+	BucketStorage< S > ss(2);
+	EXPECT_EQ(ss.insert(S(1))->x, 1);
+	EXPECT_EQ(ss.insert(S(2))->x, 2);
+	EXPECT_EQ(ss.insert(S(3))->x, 3);
+
+	auto it = ss.begin();
+	EXPECT_EQ((it++)->x, 1);
+	EXPECT_EQ((it++)->x, 2);
+	EXPECT_EQ((it++)->x, 3);
+}
+
+// assumes insertion order
+TEST(assuming_order, block_capacity_extremes1)
+{
+	BucketStorage< S > ss1(1);
+	EXPECT_EQ(ss1.insert(S(1))->x, 1);
+	EXPECT_EQ(ss1.insert(S(2))->x, 2);
+	EXPECT_EQ(ss1.insert(S(3))->x, 3);
+
+	auto it = ss1.begin();
+	EXPECT_EQ((it++)->x, 1);
+	EXPECT_EQ((it++)->x, 2);
+	EXPECT_EQ((it++)->x, 3);
+	EXPECT_EQ(it, ss1.end());
+}
+
+TEST(bucket_storage, const_bs)
+{
+	const BucketStorage< S > const_bs;
+	for (auto &s : const_bs)
+	{
+		(void)s;
+	}
+	BucketStorage< S > bs = const_bs;
+	bs.insert(S(1));
+	const auto it = bs.begin();
+	EXPECT_EQ(it->x, 1);
+}
 
 template< class ContainerType >
 concept Container = requires(ContainerType a, const ContainerType b) {
@@ -265,97 +373,6 @@ concept Container = requires(ContainerType a, const ContainerType b) {
 		a.empty()
 	} -> std::same_as< bool >;
 };
-
-TEST(bucket_storage, swap)
-{
-	BucketStorage< S > bs1;
-	bs1.insert(S(1));
-	BucketStorage< S > bs2(20);
-	bs2.insert(S(2));
-
-	int before = bs1.begin()->x;
-	bs1.swap(bs2);
-	EXPECT_EQ(bs2.begin()->x, before);
-	bs1.swap(bs2);
-	EXPECT_EQ(bs1.begin()->x, before);
-}
-
-// Warning: assumes some order of insertion
-TEST(bucket_storage, RAII)
-{
-	BucketStorage< S > bs_lvalue;
-	bs_lvalue.insert(S(1));
-	bs_lvalue.insert(S(2));
-
-	bs_lvalue = BucketStorage< S >(2);	  // rvalue assignment
-	bs_lvalue.insert(S(3));
-	bs_lvalue.insert(S(4));
-	bs_lvalue.insert(S(5));
-	EXPECT_EQ(bs_lvalue.size(), 3);
-	EXPECT_EQ(bs_lvalue.capacity(), 4);
-	EXPECT_EQ(bs_lvalue.begin()->x, 3);
-	EXPECT_EQ((++(++bs_lvalue.begin()))->x, 5);
-
-	BucketStorage< S > bs_copy(bs_lvalue);	  // lvalue copy constructor
-	EXPECT_EQ(bs_copy.size(), 3);
-	EXPECT_EQ(bs_copy.capacity(), 4);
-	EXPECT_EQ(bs_copy.begin()->x, 3);
-	EXPECT_EQ((++(++bs_lvalue.begin()))->x, 5);
-
-	bs_lvalue = bs_lvalue;	  // self assignment
-	EXPECT_EQ(bs_lvalue.size(), 3);
-	EXPECT_EQ(bs_lvalue.capacity(), 4);
-	EXPECT_EQ(bs_lvalue.begin()->x, 3);
-	EXPECT_EQ((++(++bs_lvalue.begin()))->x, 5);
-
-	BucketStorage< S > bs_rvalue_constructed(BucketStorage< S >(20));
-	bs_rvalue_constructed.insert(S(1));
-	EXPECT_EQ(bs_rvalue_constructed.size(), 1);
-	EXPECT_EQ(bs_rvalue_constructed.capacity(), 20);
-	EXPECT_EQ(bs_rvalue_constructed.begin()->x, 1);
-}
-
-// assumes order
-TEST(bucket_storage, block_capacity_extremes2)
-{
-	BucketStorage< S > ss(2);
-	EXPECT_EQ(ss.insert(S(1))->x, 1);
-	EXPECT_EQ(ss.insert(S(2))->x, 2);
-	EXPECT_EQ(ss.insert(S(3))->x, 3);
-
-	auto it = ss.begin();
-	EXPECT_EQ((it++)->x, 1);
-	EXPECT_EQ((it++)->x, 2);
-	EXPECT_EQ((it++)->x, 3);
-}
-
-// assumes order
-TEST(bucket_storage, block_capacity_extremes1)
-{
-	BucketStorage< S > ss1(1);
-	EXPECT_EQ(ss1.insert(S(1))->x, 1);
-	EXPECT_EQ(ss1.insert(S(2))->x, 2);
-	EXPECT_EQ(ss1.insert(S(3))->x, 3);
-
-	auto it = ss1.begin();
-	EXPECT_EQ((it++)->x, 1);
-	EXPECT_EQ((it++)->x, 2);
-	EXPECT_EQ((it++)->x, 3);
-}
-
-TEST(bucket_storage, const_bs)
-{
-	const BucketStorage< S > const_bs;
-	for (auto &s : const_bs)
-	{
-		(void)s;
-	}
-	BucketStorage< S > bs = const_bs;
-	bs.insert(S(1));
-	const auto it = bs.begin();
-	EXPECT_EQ(it->x, 1);
-}
-
 template< Container C >
 void container_f(C c)
 {
