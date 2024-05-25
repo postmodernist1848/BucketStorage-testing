@@ -7,7 +7,7 @@
 #include <utility>
 
 #define S_OP_LOGGING 0		 // whether to log S actions
-#define RANDOM_TEST_LOG 1	 // whether to print BS state in random test
+#define RANDOM_TEST_LOG 0	 // whether to print BS state in random test
 #define STACK_TEST 0		 // enable Stack<T> test
 
 /* Warning: tests marked with 'assumes insertion order'
@@ -270,7 +270,7 @@ auto random_bs_v()
 	{
 		insert(bs, v, Id::get_id());
 	}
-	for (int i = 0; i < v.size(); i++)
+	for (size_t i = 0; i < v.size(); i++)
 	{
 		if (randdouble() < 0.25)
 		{
