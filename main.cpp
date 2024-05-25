@@ -7,7 +7,7 @@
 #include <utility>
 
 #define S_OP_LOGGING 0		 // whether to log S actions
-#define RANDOM_TEST_LOG 0	 // whether to print BS state in random test
+#define RANDOM_TEST_LOG 1	 // whether to print BS state in random test
 #define STACK_TEST 0		 // enable Stack<T> test
 
 /* Warning: tests marked with 'assumes insertion order'
@@ -154,11 +154,16 @@ int randint(int low, int high)
 	std::uniform_int_distribution<> dist(low, high);
 	return dist(rng);
 }
-int randint()
+
+class Id
 {
-	static std::uniform_int_distribution dist(0, std::numeric_limits< int >::max());
-	return dist(rng);
-}
+	static int id;
+
+  public:
+	static int get_id() { return ++id; }
+	static void reset() { id = 0; }
+};
+int Id::id = 0;
 
 void insert(BucketStorage< S > &bs, std::vector< S > &v, int x)
 {
@@ -210,7 +215,7 @@ TEST(methods, random)
 		}
 		else
 		{
-			int to_insert = randint();
+			int to_insert = Id::get_id();
 			insert(bs, v, to_insert);
 #if RANDOM_TEST_LOG
 			std::cout << "inserting: " << to_insert << '\n';
@@ -263,7 +268,7 @@ auto random_bs_v()
 	std::vector< S > v;
 	for (int i = 0; i < 200; ++i)
 	{
-		insert(bs, v, randint());
+		insert(bs, v, Id::get_id());
 	}
 	for (int i = 0; i < v.size(); i++)
 	{
@@ -301,7 +306,7 @@ TEST(methods, get_to_distance)
 	BucketStorage< S > bs(10);
 	for (int i = 0; i < 20; ++i)
 	{
-		bs.insert(S(randint()));
+		bs.insert(S(Id::get_id()));
 	}
 	auto it = bs.begin();
 	size_t dist = 11;
@@ -321,7 +326,7 @@ TEST(methods, iterator_operators)
 	BucketStorage< S > bs(2);
 	for (int i = 0; i < 5; ++i)
 	{
-		S value = S(randint());
+		S value = S(Id::get_id());
 		EXPECT_EQ(value, *bs.insert(value)) << "Unary * operator";
 		EXPECT_EQ(value.x, bs.insert(value)->x) << "-> operator";
 	}
@@ -342,7 +347,7 @@ TEST(methods, iterator_operators)
 
 	for (int i = 1; i <= 20; ++i)
 	{
-		bs.insert(S(randint()));
+		bs.insert(S(Id::get_id()));
 	}
 
 	it = bs.begin();
@@ -589,6 +594,7 @@ class TraceHandler : public testing::EmptyTestEventListener
 	{
 		(void)test_info;
 		S::actions.clear();
+		Id::reset();
 	}
 };
 
