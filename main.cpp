@@ -99,7 +99,6 @@ TEST(stack, pushpop)
 
 TEST(bucket_storage, rvalue_insert_erase)
 {
-	S::actions.clear();
 	BucketStorage< S > ss(3);
 	for (int i = 1; i <= 10; i++)
 	{
@@ -126,7 +125,6 @@ TEST(bucket_storage, rvalue_insert_erase)
 }
 TEST(bucket_storage, lvalue_insert)
 {
-	S::actions.clear();
 	BucketStorage< S > ss(3);
 	for (int i = 1; i <= 10; i++)
 	{
@@ -274,8 +272,18 @@ TEST(bucket_storage, container)
 	// container_f(BucketStorage< S >());	  // uncomment to see why it's failing
 }
 
+class TraceHandler : public testing::EmptyTestEventListener
+{
+	// Called after a test ends.
+	void OnTestEnd(const testing::TestInfo &test_info) override { S::actions.clear(); }
+};
+
 int main(int argc, char **argv)
 {
 	::testing::InitGoogleTest(&argc, argv);
+
+	testing::TestEventListeners &listeners = testing::UnitTest::GetInstance()->listeners();
+	listeners.Append(new TraceHandler);
+
 	return RUN_ALL_TESTS();
 }
