@@ -111,56 +111,93 @@ void print(BucketStorage< S > &bs)
 	}
 	std::cout << '\n';
 }
+
+std::vector< S > to_sorted_vector(BucketStorage< S > &bs)
+{
+	std::vector< S > bs_data;
+	for (auto &s : bs)
+	{
+		bs_data.push_back(s);
+	}
+	std::sort(bs_data.begin(), bs_data.end());
+	return bs_data;
+}
+
+// basically checks if multiset of lhs is the same as rhs
+void expect_same_elements(BucketStorage< S > &lhs, BucketStorage< S > &rhs)
+{
+	EXPECT_EQ(to_sorted_vector(lhs), to_sorted_vector(rhs));
+}
+
+// modifies vector
+void expect_same_elements(std::vector< S > &lhs, BucketStorage< S > &rhs)
+{
+	std::sort(lhs.begin(), lhs.end());
+	EXPECT_EQ(lhs, to_sorted_vector(rhs));
+}
+void expect_same_elements(BucketStorage< S > &lhs, std::vector< S > &rhs)
+{
+	expect_same_elements(rhs, lhs);
+}
+
+std::random_device dev;
+std::random_device::result_type seed = dev();	 // you can use your seed to get the same inputs every time
+std::mt19937 rng(seed);
+
+double randdouble()
+{
+	static std::uniform_real_distribution<> prob(0.0, 1.0);
+	return prob(rng);
+}
+int randint(int low, int high)
+{
+	std::uniform_int_distribution<> dist(low, high);
+	return dist(rng);
+}
+int randint()
+{
+	static std::uniform_int_distribution dist(0, std::numeric_limits< int >::max());
+	return dist(rng);
+}
+
+void insert(BucketStorage< S > &bs, std::vector< S > &v, int x)
+{
+	v.emplace_back(x);
+	bs.insert(S(x));
+}
+
 // randomly chooses to insert or delete an S element
 // control vector is used to verify operations' correctness
 // the check is done by getting all BS elements into a vector and comparing sorted data
-TEST(bucket_storage, random)
+TEST(methods, random)
 {
-	std::random_device dev;
-	std::random_device::result_type seed = dev();	 // you can use your seed to get the same inputs every time
-	std::mt19937 rng(seed);
-
 	const int iterations = 200;		   // How many times to attempt insert()/erase()
 	const double delete_prob = 0.1;	   // Probability for erase()
 
 	BucketStorage< S > bs(20);	  // Here you can call an alternative constructor
 	std::vector< S > v;
-	auto insert = [&](int x)
-	{
-		v.emplace_back(x);
-		bs.insert(S(x));
-	};
+
 	auto check = [&]()
 	{
 #if RANDOM_TEST_LOG
 		print(bs);
 #endif
 		EXPECT_EQ(bs.size(), v.size());
-		std::vector< S > bs_data;
-		for (auto &s : bs)
-		{
-			bs_data.push_back(s);
-		}
-		std::sort(bs_data.begin(), bs_data.end());
-		std::sort(v.begin(), v.end());
-		EXPECT_EQ(bs_data, v);
+		expect_same_elements(bs, v);
 	};
 	auto erase = [&](BucketStorage< S >::const_iterator bsit, std::vector< S >::const_iterator vit)
 	{
 		return std::make_pair(bs.erase(bsit), v.erase(vit));
 	};
 
-	std::uniform_real_distribution<> prob(0.0, 1.0);
-	std::uniform_int_distribution<> ints(0, std::numeric_limits< int >::max());
 	for (int i = 0; i < iterations; i++)
 	{
-		double r = prob(rng);
+		double r = randdouble();
 		if (r <= delete_prob)
 		{
-			if (v.size() == 0)
+			if (v.empty())
 				continue;
-			std::uniform_int_distribution<> d(0, (int)v.size() - 1);
-			int index = d(rng);
+			int index = randint(0, int(v.size() - 1));
 			auto vit = v.begin() + index;
 			auto bsit = std::find(bs.begin(), bs.end(), v[index]);	  // requires std::iterator_traits
 			EXPECT_NE(bsit, bs.end());
@@ -173,8 +210,8 @@ TEST(bucket_storage, random)
 		}
 		else
 		{
-			int to_insert = ints(rng);
-			insert(to_insert);
+			int to_insert = randint();
+			insert(bs, v, to_insert);
 #if RANDOM_TEST_LOG
 			std::cout << "inserting: " << to_insert << '\n';
 #endif
@@ -182,7 +219,7 @@ TEST(bucket_storage, random)
 		}
 	}
 }
-TEST(bucket_storage, swap)
+TEST(methods, swap)
 {
 	/* Fun fact:
 	 * std::swap can (and is implemented in standard library by default)
@@ -203,6 +240,43 @@ TEST(bucket_storage, swap)
 	EXPECT_EQ(bs2.begin()->x, before);
 	bs1.swap(bs2);
 	EXPECT_EQ(bs1.begin()->x, before);
+}
+
+TEST(methods, empty)
+{
+	BucketStorage< S > ss(3);
+	EXPECT_TRUE(ss.empty());
+	ss.insert(S(1));
+	EXPECT_FALSE(ss.empty());
+	ss.insert(S(2));
+	EXPECT_FALSE(ss.empty());
+	for (auto it = ss.begin(); it != ss.end();)
+	{
+		it = ss.erase(it);
+	}
+	EXPECT_TRUE(ss.empty());
+}
+TEST(methods, shrink_to_fit)
+{
+	BucketStorage< S > bs;
+	std::vector< S > v;
+	for (int i = 0; i < 200; ++i)
+	{
+		insert(bs, v, randint());
+	}
+	for (int i = 0; i < v.size(); i++)
+	{
+		if (randdouble() < 0.25)
+		{
+			bs.erase(std::find(bs.begin(), bs.end(), v[i]));
+			v.erase(v.begin() + i);
+		}
+	}
+	expect_same_elements(bs, v);
+	// std::cout << "before: " << bs.capacity() << '\n';
+	bs.shrink_to_fit();
+	// std::cout << "after: " << bs.capacity() << '\n';
+	expect_same_elements(bs, v);
 }
 
 // assumes insertion order
@@ -316,7 +390,7 @@ TEST(assuming_order, block_capacity_extremes1)
 	EXPECT_EQ(it, ss1.end());
 }
 
-TEST(bucket_storage, const_bs)
+TEST(typing, const_bs)
 {
 	const BucketStorage< S > const_bs;
 	for (auto &s : const_bs)
@@ -379,7 +453,7 @@ void container_f(C c)
 	(void)c;
 }
 
-TEST(bucket_storage, concepts)
+TEST(typing, concepts)
 {
 	EXPECT_TRUE(std::is_default_constructible< BucketStorage< S > >());
 	EXPECT_TRUE(std::is_copy_assignable< BucketStorage< S > >());
