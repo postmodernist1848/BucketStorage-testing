@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <random>
 #include <utility>
+#include <vector>
 
 #define S_OP_LOGGING 0		 // whether to log S actions
 #define RANDOM_TEST_LOG 0	 // whether to print BS state in random test
@@ -85,6 +86,37 @@ struct S
 	int x;
 };
 std::vector< const char * > S::actions;
+
+// memory allocating object for memory leak testing
+class M
+{
+  public:
+	explicit M(int n) : data(new int[size])
+	{
+		for (size_t i = 0; i < size; i++)
+		{
+			data[i] = n;
+		}
+	}
+	M(const M &m) : data(new int[size]) { memcpy(data, m.data, size * sizeof *data); }
+	M(M &&m) noexcept : data(nullptr) { std::swap(data, m.data); }
+	M &operator=(M m)
+	{
+		std::swap(data, m.data);
+		return *this;
+	}
+	~M() { delete[] data; }
+
+	friend std::ostream &operator<<(std::ostream &os, const M &m)
+	{
+		os << '[' << m.data[0] << ", ..., " << m.data[size - 1] << ']';
+		return os;
+	}
+
+  private:
+	static constexpr size_t size = 32;
+	int *data;
+};
 
 #if STACK_TEST
 TEST(stack, pushpop)
@@ -178,7 +210,7 @@ void insert(BucketStorage< S > &bs, std::vector< S > &v, int x)
 // the check is done by getting all BS elements into a vector and comparing sorted data
 TEST(methods, random)
 {
-	const int iterations = 1000;		   // How many times to attempt insert()/erase()
+	const int iterations = 1000;	   // How many times to attempt insert()/erase()
 	const double delete_prob = 0.1;	   // Probability for erase()
 
 	BucketStorage< S > bs(20);	  // Here you can call an alternative constructor
@@ -509,8 +541,14 @@ TEST(typing, cbegin)
 		   "const overload that "
 		   "returns const_iterator";
 	BucketStorage< S > bs;
+	EXPECT_TRUE((std::same_as< decltype(bs.begin()), BucketStorage< S >::iterator >));
+	EXPECT_TRUE((std::same_as< decltype(bs.end()), BucketStorage< S >::iterator >));
+
 	EXPECT_TRUE((std::same_as< decltype(bs.cbegin()), BucketStorage< S >::const_iterator >));
 	EXPECT_TRUE((std::same_as< decltype(bs.cend()), BucketStorage< S >::const_iterator >));
+
+	BucketStorage< S >::const_iterator const_it = bs.begin();	 // implicit conversion
+	(void)const_it;
 }
 
 TEST(typing, const_bs)
@@ -538,27 +576,13 @@ concept Container = requires(ContainerType a, const ContainerType b) {
 	requires std::signed_integral< typename ContainerType::difference_type >;
 	requires std::same_as< typename ContainerType::difference_type, typename std::iterator_traits< typename ContainerType::iterator >::difference_type >;
 	requires std::same_as< typename ContainerType::difference_type, typename std::iterator_traits< typename ContainerType::const_iterator >::difference_type >;
-	{
-		a.begin()
-	} -> std::same_as< typename ContainerType::iterator >;
-	{
-		a.end()
-	} -> std::same_as< typename ContainerType::iterator >;
-	{
-		b.begin()
-	} -> std::same_as< typename ContainerType::const_iterator >;
-	{
-		b.end()
-	} -> std::same_as< typename ContainerType::const_iterator >;
-	{
-		a.cbegin()
-	} -> std::same_as< typename ContainerType::const_iterator >;
-	{
-		a.cend()
-	} -> std::same_as< typename ContainerType::const_iterator >;
-	{
-		a.size()
-	} -> std::same_as< typename ContainerType::size_type >;
+	{ a.begin() } -> std::same_as< typename ContainerType::iterator >;
+	{ a.end() } -> std::same_as< typename ContainerType::iterator >;
+	{ b.begin() } -> std::same_as< typename ContainerType::const_iterator >;
+	{ b.end() } -> std::same_as< typename ContainerType::const_iterator >;
+	{ a.cbegin() } -> std::same_as< typename ContainerType::const_iterator >;
+	{ a.cend() } -> std::same_as< typename ContainerType::const_iterator >;
+	{ a.size() } -> std::same_as< typename ContainerType::size_type >;
 	/*
 	{
 		// maybe we don't really need this
@@ -566,9 +590,7 @@ concept Container = requires(ContainerType a, const ContainerType b) {
 		a.max_size()
 	} -> std::same_as< typename ContainerType::size_type >;
 	*/
-	{
-		a.empty()
-	} -> std::same_as< bool >;
+	{ a.empty() } -> std::same_as< bool >;
 };
 template< Container C >
 void container_f(C c)
@@ -590,32 +612,86 @@ TEST(typing, concepts)
 }
 
 int iterations = 10000;
-TEST(benchmark, insert_erase_iter) {
+const double delete_prob = 0.2;
 
-    std::cout << "Benchmark: " << iterations << " iterations\n";
-	const double delete_prob = 0.2;
-	BucketStorage< S > bs(20);
+// Compile this test with -fsanitize=address
+TEST(methods, memory_leaks)
+{
+	BucketStorage< M > bs(20);
+
+	for (int i = 0; i < 1000; i++)
+	{
+		double r = randdouble();
+		if (r <= delete_prob && !bs.empty())
+		{
+			int pos = randint(0, bs.size() - 1);
+			auto it = bs.begin();
+			for (int j = 0; j < pos; ++j)
+			{	 // iteration
+				++it;
+			}
+			bs.erase(it);	 // erase
+		}
+		else
+		{
+			bs.insert(M(Id::get_id()));	   // insert
+		}
+	}
+}
+
+// A relative benchmark that can be used to optimize the data structure.
+// Includes inserting, erasing and iterating (before every erase).
+// NOTE: pass in any integer as commandline arguments to change the iterations value
+TEST(benchmark, insert_erase_iter)
+{
+	std::cout << "Benchmark: " << iterations << " iterations\n";
+	BucketStorage< S > bs;
 
 	for (int i = 0; i < iterations; i++)
 	{
 		double r = randdouble();
 		if (r <= delete_prob && !bs.empty())
 		{
-            int pos = randint(0, bs.size() - 1);
-            auto it = bs.begin();
-            for (int i = 0; i < pos; ++i) { // iteration
-                ++it;
-            }
-            bs.erase(it); // erase
+			int pos = randint(0, bs.size() - 1);
+			auto it = bs.begin();
+			for (int j = 0; j < pos; ++j)
+			{	 // iteration
+				++it;
+			}
+			bs.erase(it);	 // erase
 		}
 		else
 		{
-			bs.insert(S(Id::get_id())); // insert
+			bs.insert(S(Id::get_id()));	   // insert
 		}
 	}
 }
 
-//TODO: a memory leak test (use object that allocates memory instead of S)
+// This is the control benchmark of the same operations as the above test
+// performed with a vector to compare gains in speed.
+TEST(benchmark, insert_erase_iter_vector)
+{
+	std::vector< S > v;
+
+	for (int i = 0; i < iterations; i++)
+	{
+		double r = randdouble();
+		if (r <= delete_prob && !v.empty())
+		{
+			int pos = randint(0, v.size() - 1);
+			auto it = v.begin();
+			for (int j = 0; j < pos; ++j)
+			{	 // iteration
+				++it;
+			}
+			v.erase(it);	// erase
+		}
+		else
+		{
+			v.push_back(S(Id::get_id()));	 // insert
+		}
+	}
+}
 
 class TraceHandler : public testing::EmptyTestEventListener
 {
@@ -631,9 +707,10 @@ class TraceHandler : public testing::EmptyTestEventListener
 int main(int argc, char **argv)
 {
 	::testing::InitGoogleTest(&argc, argv);
-    if (argc > 1) {
-        iterations = std::atoi(argv[1]);
-    }
+	if (argc > 1)
+	{
+		iterations = std::atoi(argv[1]);
+	}
 
 	testing::TestEventListeners &listeners = testing::UnitTest::GetInstance()->listeners();
 	listeners.Append(new TraceHandler);
