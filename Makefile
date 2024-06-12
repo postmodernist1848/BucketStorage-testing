@@ -6,13 +6,13 @@ all: main
 main: main.cpp stack.hpp bucket_storage.hpp
 	$(CC) $(CXXFLAGS) -lgtest main.cpp -o main
 
-.PHONY: memory
+.PHONY: memory benchmark
 
 # make -B memory to recompile
 memory: CXXFLAGS += -fsanitize=address -O0
 memory: main
 
-benchmark: CXXFLAGS += -O0
+benchmark: CXXFLAGS += -O2
 benchmark: main
 
 clean:
