@@ -416,6 +416,25 @@ TEST(methods, iterator_operators)
 		EXPECT_TRUE(--bs.end() > it);
 		EXPECT_TRUE(it < --bs.end());
 	}
+
+	// expecting these to compile
+	(void)(it == bs.cbegin());
+	(void)(bs.cbegin() == it);
+
+	(void)(it != bs.cbegin());
+	(void)(bs.cbegin() != it);
+
+	(void)(it < bs.cbegin());
+	(void)(bs.cbegin() < it);
+
+	(void)(it >= bs.cbegin());
+	(void)(bs.cbegin() >= it);
+
+	(void)(it > bs.cbegin());
+	(void)(bs.cbegin() > it);
+
+	(void)(it <= bs.cbegin());
+	(void)(bs.cbegin() <= it);
 }
 
 // assumes insertion order
@@ -547,8 +566,27 @@ TEST(typing, cbegin)
 	EXPECT_TRUE((std::same_as< decltype(bs.cbegin()), BucketStorage< S >::const_iterator >));
 	EXPECT_TRUE((std::same_as< decltype(bs.cend()), BucketStorage< S >::const_iterator >));
 
-	BucketStorage< S >::const_iterator const_it = bs.begin();	 // implicit conversion
-	(void)const_it;
+	{
+		BucketStorage< S >::const_iterator const_it = bs.begin();	 // implicit conversion
+		(void)const_it;
+	}
+
+	// BucketStorage< S >::iterator it(const_it);	   // should not compile
+	bs.insert(S(78));
+	BucketStorage< S >::iterator b = bs.begin();
+	BucketStorage< S >::iterator it = b;
+	EXPECT_EQ(*b, *it);
+
+	BucketStorage< S >::const_iterator cb = bs.cbegin();
+	BucketStorage< S >::const_iterator const_it = cb;
+	EXPECT_EQ(*cb, *const_it);
+
+	// it = cb; // should not compile
+	cb = it;
+	EXPECT_EQ(*cb, *it);
+
+	std::cout << *it << '\n';
+	std::cout << *const_it << '\n';
 }
 
 TEST(typing, const_bs)
@@ -566,7 +604,7 @@ TEST(typing, const_bs)
 
 template< class ContainerType >
 concept Container = requires(ContainerType a, const ContainerType b) {
-	requires std::regular< ContainerType >;
+	requires std::semiregular< ContainerType >;
 	requires std::swappable< ContainerType >;
 	requires std::destructible< typename ContainerType::value_type >;
 	requires std::same_as< typename ContainerType::reference, typename ContainerType::value_type & >;
